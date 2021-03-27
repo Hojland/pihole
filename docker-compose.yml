@@ -1,0 +1,90 @@
+version: "3"
+
+# More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+services:
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    dns:
+      - 127.0.0.1
+      - 1.1.1.1
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+      - "8081:80/tcp"
+      - "8443:443/tcp"
+    environment:
+      TZ: 'Europe/Copenhagen'
+      ServerIP: 192.168.1.185
+      PROXY_LOCATION: pihole
+      VIRTUAL_HOST: pihole.pi.lan
+      VIRTUAL_PORT: 80
+      DNSMASQ_LISTENING: all
+      FTL_CMD: debug
+    env_file:
+      - .env
+    volumes:
+      - './etc-pihole/:/etc/pihole/'
+      - './etc-dnsmasq.d/:/etc/dnsmasq.d/'
+    #  - './etc-lighttpd/external.conf:/etc/lighttpd/external.conf'
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+    labels:
+       # required when using --docker.exposedbydefault=false
+       - "traefik.enable=true"
+       # https://www.techjunktrunk.com/docker/2017/11/03/traefik-default-server-catch-all/
+       - traefik.frontend.rule=HostRegexp:pihole.${DOMAINNAME},{catchall:.*}
+       - traefik.http.routers.pihole.rule=Host(`pihole.${DOMAINNAME}`)
+       - traefik.frontend.priority=1
+       - traefik.backend=pihole
+       - traefik.http.services.pihole.loadbalancer.server.port=80
+       - traefik.http.routers.pihole.entrypoints=web
+#       - traefik.http.routers.pihole.tls.certresolver=myresolver
+    networks:
+      - discovery
+
+  traefik:
+    image: traefik:v2.1
+    container_name: traefik
+    domainname: ${DOMAINNAME}
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+#      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+#      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+#      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    dns:
+      - 127.0.0.1
+      - 192.168.1.1
+      - 1.1.1.1
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+#      - ./traefik/traefik.toml:/etc/traefik/traefik.toml
+      - ./traefik/letsencrypt:/letsencrypt:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - traefik.backend=traefik
+      - traefik.frontend.rule=Host:traefik.${DOMAINNAME}"
+      - traefik.port=8080
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`traefik.${DOMAINNAME}`)
+      - traefik.http.routers.api.entrypoints=web
+      - traefik.http.routers.api.service=api@internal
+#      - traefik.http.routers.api.tls.certresolver=myresolver
+    networks:
+      - discovery
+
+
+networks:
+  # Discovery is manually created to avoid forcing any order of docker-compose stack creation (`docker network create discovery`)
+  # allows other compose files to be seen by proxy
+  # Not required if you aren't using multiple docker-compose files...
+  discovery:
+    external: true
