@@ -1,6 +1,3 @@
-version: "3"
-
-# More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
 services:
   pihole:
     container_name: pihole
@@ -12,16 +9,17 @@ services:
       - "53:53/tcp"
       - "53:53/udp"
       - "67:67/udp"
-      - "8081:80/tcp"
+      - "8081:80/tcp" # admin
       - "8443:443/tcp"
     environment:
       TZ: 'Europe/Copenhagen'
-      ServerIP: 192.168.1.185
+      ServerIP: 192.168.1.184
       PROXY_LOCATION: pihole
       VIRTUAL_HOST: pihole.pi.lan
       VIRTUAL_PORT: 80
       DNSMASQ_LISTENING: all
       FTL_CMD: debug
+      WEBPASSWORD: ${WEBPASSWORD}
     env_file:
       - .env
     volumes:
